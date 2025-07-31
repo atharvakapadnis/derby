@@ -39,6 +39,216 @@ if 'bettors_setup_complete' not in st.session_state:
 if 'target_bettor_count' not in st.session_state:
     st.session_state.target_bettor_count = 0
 
+# Initialize authentication session state
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+if 'user_role' not in st.session_state:
+    st.session_state.user_role = None
+
+# Hardcoded credentials (in production, these should be stored securely)
+ADMIN_CREDENTIALS = {
+    "admin": "derby2024",
+    "organizer": "racing123"
+}
+
+def check_credentials(username: str, password: str) -> tuple[bool, str]:
+    """Check if credentials are valid and return user role."""
+    if username in ADMIN_CREDENTIALS and ADMIN_CREDENTIALS[username] == password:
+        return True, "admin"
+    return False, None
+
+def login_page():
+    """Display login page."""
+    st.title("🏇 Derby Betting System - Login")
+    st.markdown("---")
+    
+    # Center the login form
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.subheader("Admin Login")
+        st.info("Enter your credentials to access the admin dashboard")
+        
+        with st.form("login_form"):
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            
+            col_a, col_b, col_c = st.columns([1, 2, 1])
+            with col_b:
+                login_button = st.form_submit_button("🔑 Login", use_container_width=True, type="primary")
+            
+            if login_button:
+                is_valid, role = check_credentials(username, password)
+                
+                if is_valid:
+                    st.session_state.authenticated = True
+                    st.session_state.user_role = role
+                    st.success("Login successful! Redirecting...")
+                    st.rerun()
+                else:
+                    st.error("Invalid username or password")
+        
+        st.markdown("---")
+        
+        # Public scoreboard access
+        st.subheader("View Public Scoreboard")
+        st.info("No login required to view current standings")
+        
+        if st.button("📊 View Scoreboard", use_container_width=True):
+            st.session_state.user_role = "viewer"
+            st.rerun()
+
+def logout():
+    """Handle user logout."""
+    st.session_state.authenticated = False
+    st.session_state.user_role = None
+    st.rerun()
+
+def show_user_scoreboard():
+    """Display simplified view-only scoreboard for regular users."""
+    st.title("🏇 Derby Betting System - Live Scoreboard")
+    st.markdown("---")
+    
+    # Add a login link for admins
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col3:
+        if st.button("🔑 Admin Login"):
+            st.session_state.user_role = None
+            st.rerun()
+    
+    # Display simplified scoreboard
+    display_simple_scoreboard()
+    
+    # Add refresh functionality
+    st.markdown("---")
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        if st.button("🔄 Refresh Scoreboard", use_container_width=True):
+            st.rerun()
+
+def display_simple_scoreboard():
+    """Display a simplified scoreboard showing only total scores."""
+    import pandas as pd
+    
+    if not st.session_state.bettors:
+        st.info("No bettors added yet.")
+        return
+    
+    st.markdown("## 🏆 Current Standings")
+    
+    # Get basic race info
+    completed_races = len([r for r in st.session_state.races if 'results' in r])
+    total_bettors = len(st.session_state.bettors)
+    
+    # Show key stats
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Participants", total_bettors)
+    with col2:
+        st.metric("Races Completed", f"{completed_races}/10")
+    with col3:
+        if completed_races > 0:
+            st.metric("Progress", f"{completed_races * 10}%")
+        else:
+            st.metric("Status", "Starting Soon")
+    
+    st.markdown("---")
+    
+    # Calculate total scores for each bettor
+    bettor_scores = []
+    for bettor in st.session_state.bettors:
+        total_points = 0
+        bettor_name = bettor['name']
+        
+        # Calculate points from completed races
+        for race in st.session_state.races:
+            if 'results' in race:
+                bet_horse = race['results']['bettor_bets'].get(bettor_name, None)
+                if bet_horse == race['results']['first']:
+                    total_points += 3
+                elif bet_horse == race['results']['second']:
+                    total_points += 2
+                elif bet_horse == race['results']['third']:
+                    total_points += 1
+        
+        bettor_scores.append({
+            'Name': bettor_name,
+            'Total Points': total_points
+        })
+    
+    # Sort by points (descending)
+    bettor_scores.sort(key=lambda x: x['Total Points'], reverse=True)
+    
+    # Add rank
+    for i, bettor in enumerate(bettor_scores):
+        bettor['Rank'] = i + 1
+    
+    # Create DataFrame
+    df = pd.DataFrame(bettor_scores)
+    df = df[['Rank', 'Name', 'Total Points']]  # Reorder columns
+    
+    # Search functionality
+    search_term = st.text_input("🔍 Search for your name:", key="simple_search")
+    
+    # Filter if search term provided
+    if search_term:
+        filtered_df = df[df['Name'].str.contains(search_term, case=False, na=False)]
+        if not filtered_df.empty:
+            st.markdown(f"### 📍 Search Results for '{search_term}':")
+            st.dataframe(
+                filtered_df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Rank": st.column_config.NumberColumn("Rank", width="small"),
+                    "Name": st.column_config.TextColumn("Name", width="medium"),
+                    "Total Points": st.column_config.NumberColumn("Points", width="small")
+                }
+            )
+        else:
+            st.warning(f"No results found for '{search_term}'")
+        
+        st.markdown("---")
+    
+    # Show top performers in table format
+    st.markdown("### 🥇 Top 10 Leaderboard")
+    top_10 = df.head(10)
+    
+    if not top_10.empty:
+        st.dataframe(
+            top_10,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Rank": st.column_config.NumberColumn("Rank", width="small"),
+                "Name": st.column_config.TextColumn("Name", width="medium"),
+                "Total Points": st.column_config.NumberColumn("Points", width="small")
+            }
+        )
+    
+    # Show all standings in expandable section
+    if len(df) > 10:
+        with st.expander(f"📊 View All {len(df)} Participants", expanded=False):
+            st.dataframe(
+                df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Rank": st.column_config.NumberColumn("Rank", width="small"),
+                    "Name": st.column_config.TextColumn("Name", width="medium"),
+                    "Total Points": st.column_config.NumberColumn("Points", width="small")
+                },
+                height=400
+            )
+    
+    # Race completion status
+    if completed_races < 10:
+        st.markdown("---")
+        st.info(f"🏁 {10 - completed_races} races remaining. Check back for updates!")
+    else:
+        st.markdown("---")
+        st.success("🏆 All races completed! Final results above.")
+
 def display_scoreboard():
     """Display the scoreboard as a table with all 10 races - optimized for large numbers of bettors"""
     import pandas as pd
@@ -314,6 +524,17 @@ def display_scoreboard():
                 mime="application/json"
             )
 
+# Check authentication and route to appropriate page
+if st.session_state.user_role == "viewer":
+    # Show public scoreboard only
+    show_user_scoreboard()
+    st.stop()
+elif not st.session_state.authenticated:
+    # Show login page
+    login_page()
+    st.stop()
+
+# From here on, user is authenticated as admin
 # Prompt for horse entry if setup not complete
 if not st.session_state.setup_complete:
     st.title("🏇 Derby Betting System - Setup Horses")
@@ -411,6 +632,14 @@ st.markdown("---")
 
 # Sidebar for navigation
 st.sidebar.title("Navigation")
+
+# Show logout button for authenticated users
+if st.session_state.authenticated:
+    st.sidebar.markdown("---")
+    st.sidebar.write(f"👤 Logged in as: **{st.session_state.user_role}**")
+    if st.sidebar.button("🚪 Logout", use_container_width=True):
+        logout()
+
 page = st.sidebar.selectbox(
     "Choose a page:",
     ["🏠 Dashboard", "🐎 Horse Management", "👥 Manage Bettors", "🏁 Race Management", "📊 Scoreboard", "⚙️ Settings"]
