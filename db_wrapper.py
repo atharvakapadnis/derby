@@ -43,6 +43,7 @@ class StreamlitDatabaseWrapper:
         st.session_state.target_horse_count = int(self.db.get_setting('target_horse_count', '0'))
         st.session_state.bettors_setup_complete = self.db.get_setting('bettors_setup_complete', 'False') == 'True'
         st.session_state.target_bettor_count = int(self.db.get_setting('target_bettor_count', '0'))
+        st.session_state.total_races = int(self.db.get_setting('total_races', '10'))
         
         # Load races (convert to old format)
         races_from_db = self.db.get_all_races()
@@ -174,6 +175,15 @@ class StreamlitDatabaseWrapper:
         self.db.set_setting('current_race', str(new_race_number))
         st.session_state.current_race = new_race_number
     
+    def set_total_races(self, total_races: int):
+        """Set the total number of races."""
+        self.db.set_setting('total_races', str(total_races))
+        st.session_state.total_races = total_races
+    
+    def get_total_races(self) -> int:
+        """Get the total number of races."""
+        return st.session_state.get('total_races', 10)
+    
     # UTILITY OPERATIONS
     def reset_all_data(self):
         """Reset all data."""
@@ -189,6 +199,7 @@ class StreamlitDatabaseWrapper:
             st.session_state.target_horse_count = 0
             st.session_state.bettors_setup_complete = False
             st.session_state.target_bettor_count = 0
+            st.session_state.total_races = 10
         return success
     
     def reset_horses_only(self):
@@ -252,7 +263,8 @@ class StreamlitDatabaseWrapper:
             'setup_complete': st.session_state.setup_complete,
             'target_horse_count': st.session_state.target_horse_count,
             'bettors_setup_complete': st.session_state.bettors_setup_complete,
-            'target_bettor_count': st.session_state.target_bettor_count
+            'target_bettor_count': st.session_state.target_bettor_count,
+            'total_races': st.session_state.total_races
         }
     
     def get_stats(self) -> Dict:

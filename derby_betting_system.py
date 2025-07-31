@@ -44,6 +44,8 @@ if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 if 'user_role' not in st.session_state:
     st.session_state.user_role = None
+if 'total_races' not in st.session_state:
+    st.session_state.total_races = 10
 
 # Hardcoded credentials (in production, these should be stored securely)
 ADMIN_CREDENTIALS = {
@@ -145,10 +147,10 @@ def display_simple_scoreboard():
     with col1:
         st.metric("Total Participants", total_bettors)
     with col2:
-        st.metric("Races Completed", f"{completed_races}/10")
+        st.metric("Races Completed", f"{completed_races}/{st.session_state.total_races}")
     with col3:
         if completed_races > 0:
-            st.metric("Progress", f"{completed_races * 10}%")
+            st.metric("Progress", f"{int((completed_races / st.session_state.total_races) * 100)}%")
         else:
             st.metric("Status", "Starting Soon")
     
@@ -242,15 +244,15 @@ def display_simple_scoreboard():
             )
     
     # Race completion status
-    if completed_races < 10:
+    if completed_races < st.session_state.total_races:
         st.markdown("---")
-        st.info(f"🏁 {10 - completed_races} races remaining. Check back for updates!")
+        st.info(f"🏁 {st.session_state.total_races - completed_races} races remaining. Check back for updates!")
     else:
         st.markdown("---")
-        st.success("🏆 All races completed! Final results above.")
+        st.success(f"🏆 All {st.session_state.total_races} races completed! Final results above.")
 
 def display_scoreboard():
-    """Display the scoreboard as a table with all 10 races - optimized for large numbers of bettors"""
+    """Display the scoreboard as a table with all races - optimized for large numbers of bettors"""
     import pandas as pd
     
     if not st.session_state.bettors:
@@ -290,7 +292,7 @@ def display_scoreboard():
     
     # Determine which races to show
     if show_all_races:
-        races_to_show = range(1, 11)
+        races_to_show = range(1, st.session_state.total_races + 1)
     else:
         # Only show completed races
         completed_race_numbers = [r['race_number'] for r in st.session_state.races if 'results' in r]
@@ -351,7 +353,7 @@ def display_scoreboard():
     with col1:
         st.metric("Total Bettors", f"{total_bettors}/{len(bettor_names)}")
     with col2:
-        st.metric("Races Complete", f"{completed_races}/10")
+        st.metric("Races Complete", f"{completed_races}/{st.session_state.total_races}")
     with col3:
         if total_points:
             leader_points = max(total_points)
@@ -659,7 +661,7 @@ if page == "🏠 Dashboard":
     
     with col3:
         completed_races = len([r for r in st.session_state.races if 'results' in r])
-        st.metric("Races Done", f"{completed_races}/10")
+        st.metric("Races Done", f"{completed_races}/{st.session_state.total_races}")
     
     with col4:
         if st.session_state.bettors:
@@ -672,7 +674,7 @@ if page == "🏠 Dashboard":
     
     # Current race status
     if st.session_state.bettors_setup_complete:
-        if completed_races < 10:
+        if completed_races < st.session_state.total_races:
             current_race_completed = any(r.get('race_number') == st.session_state.current_race and 'results' in r 
                                        for r in st.session_state.races)
             
@@ -1195,7 +1197,7 @@ elif page == "🏁 Race Management":
         st.metric("Current Race", st.session_state.current_race)
     with col2:
         completed_races = len([r for r in st.session_state.races if 'results' in r])
-        st.metric("Completed Races", f"{completed_races}/10")
+        st.metric("Completed Races", f"{completed_races}/{st.session_state.total_races}")
     with col3:
         st.metric("Total Bettors", len(st.session_state.bettors))
     
@@ -1268,12 +1270,12 @@ elif page == "🏁 Race Management":
         
         st.markdown("---")
         
-        if st.session_state.current_race < 10:
+        if st.session_state.current_race < st.session_state.total_races:
             if st.button("🏁 Next Race", type="primary"):
                 db.advance_to_next_race()
                 st.rerun()
         else:
-            st.info("🏆 All 10 races completed! Check the scoreboard for final results.")
+            st.info(f"🏆 All {st.session_state.total_races} races completed! Check the scoreboard for final results.")
     else:
         # Get horse numbers for the race
         horse_numbers = st.session_state.horses
@@ -1588,6 +1590,50 @@ elif page == "📊 Scoreboard":
 elif page == "⚙️ Settings":
     st.header("Settings")
     
+    # Race Configuration
+    st.subheader("🏁 Race Configuration")
+    
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        new_total_races = st.number_input(
+            "Total Number of Races", 
+            min_value=1, 
+            max_value=50, 
+            value=st.session_state.total_races,
+            step=1,
+            help="Changes the total number of races for this event"
+        )
+    
+    with col2:
+        st.markdown("<br>", unsafe_allow_html=True)  # Add spacing
+        if st.button("Update Race Count", type="primary"):
+            # Check if any races have results
+            completed_races = len([r for r in st.session_state.races if 'results' in r])
+            
+            if new_total_races < completed_races:
+                st.error(f"Cannot reduce race count below {completed_races} - that many races are already completed!")
+            elif new_total_races < st.session_state.current_race:
+                st.error(f"Cannot reduce race count below {st.session_state.current_race} - we're already on race {st.session_state.current_race}!")
+            else:
+                db.set_total_races(new_total_races)
+                st.success(f"Race count updated to {new_total_races} races!")
+                st.rerun()
+    
+    # Show current status
+    completed_races = len([r for r in st.session_state.races if 'results' in r])
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Current Total", f"{st.session_state.total_races} races")
+    with col2:
+        st.metric("Completed", f"{completed_races} races")
+    with col3:
+        st.metric("Remaining", f"{st.session_state.total_races - completed_races} races")
+    
+    if completed_races > 0:
+        st.info(f"📋 Note: You can only increase the race count since {completed_races} race(s) are already completed.")
+    
+    st.markdown("---")
+    
     st.subheader("Data Management")
     
     col1, col2, col3 = st.columns(3)
@@ -1642,6 +1688,7 @@ elif page == "⚙️ Settings":
         st.write(f"**Total Bettors:** {stats['total_bettors']}")
         st.write(f"**Races Completed:** {stats['completed_races']}")
         st.write(f"**Current Race:** {st.session_state.current_race}")
+        st.write(f"**Total Races:** {st.session_state.total_races}")
     
     with col2:
         st.write(f"**Target Horse Count:** {st.session_state.target_horse_count}")
