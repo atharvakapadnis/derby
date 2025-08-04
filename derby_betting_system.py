@@ -583,7 +583,7 @@ if st.session_state.setup_complete and not st.session_state.bettors_setup_comple
         st.stop()
     
     st.subheader(f"Step 2: Add Bettors ({len(st.session_state.bettors)}/{st.session_state.target_bettor_count})")
-    st.progress(len(st.session_state.bettors) / st.session_state.target_bettor_count)
+    st.progress(min(len(st.session_state.bettors) / st.session_state.target_bettor_count, 1.0))
     
     # Add bettor form
     col1, col2 = st.columns([3, 1])
@@ -827,7 +827,7 @@ elif page == "👥 Manage Bettors":
             st.stop()
         
         st.subheader(f"Step 2: Add Bettors ({len(st.session_state.bettors)}/{st.session_state.target_bettor_count})")
-        st.progress(len(st.session_state.bettors) / st.session_state.target_bettor_count)
+        st.progress(min(len(st.session_state.bettors) / st.session_state.target_bettor_count, 1.0))
         
         # Bulk import section
         with st.expander("📋 Bulk Import Bettors", expanded=len(st.session_state.bettors) == 0):
@@ -1493,7 +1493,7 @@ elif page == "🏁 Race Management":
         
         # Progress indicator
         filled_bets = sum(1 for bet in bettor_bets.values() if bet.strip())
-        st.progress(filled_bets / len(bettor_names))
+        st.progress(min(filled_bets / len(bettor_names), 1.0))
         st.caption(f"Bets entered: {filled_bets}/{len(bettor_names)}")
         
         st.markdown("---")
