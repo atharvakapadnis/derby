@@ -1449,9 +1449,14 @@ elif page == "🏁 Race Management":
         else:
             page_bettors = filtered_bettors
         
-        # Track bets and validation
+        # Initialize session state for ALL bettors first (not just current page)
+        for bettor in bettor_names:
+            bet_key = f"bet_{bettor}_{st.session_state.current_race}"
+            if bet_key not in st.session_state:
+                st.session_state[bet_key] = ''
+        
+        # Track validation for current page only
         invalid_bets = []
-        bettor_bets = {}
         
         # Display bets in grid format (3 columns)
         cols_per_row = 3
@@ -1461,27 +1466,37 @@ elif page == "🏁 Race Management":
                 if j < len(cols):
                     with cols[j]:
                         bet_key = f"bet_{bettor}_{st.session_state.current_race}"
-                        if bet_key not in st.session_state:
-                            st.session_state[bet_key] = ''
                         
                         # Show bettor name and input
                         st.write(f"**{bettor}**")
-                        current_bet = st.text_input(
+                        
+                        # Use a unique key that includes page info to avoid conflicts
+                        page_key = f"page_input_{bet_key}_{hash(str(page_bettors))}"
+                        
+                        # Get current value from session state
+                        current_value = st.session_state.get(bet_key, '')
+                        
+                        # Create the input widget
+                        entered_bet = st.text_input(
                             "Horse #:", 
-                            key=bet_key,  # Use bet_key directly as the key
+                            value=current_value,
+                            key=page_key,
                             placeholder="e.g. 3",
                             label_visibility="collapsed"
                         )
                         
-                        # Get current bet value from session state (this will persist across pages)
-                        current_bet_value = st.session_state.get(bet_key, '')
-                        bettor_bets[bettor] = current_bet_value
+                        # Update session state if value changed
+                        if entered_bet != current_value:
+                            st.session_state[bet_key] = entered_bet
+                        
+                        # Use the session state value for validation (always current)
+                        bet_value = st.session_state.get(bet_key, '')
                         
                         # Validate bet
-                        if current_bet_value and current_bet_value not in horse_numbers:
-                            invalid_bets.append(f"{bettor}: Horse #{current_bet_value}")
+                        if bet_value and bet_value not in horse_numbers:
+                            invalid_bets.append(f"{bettor}: Horse #{bet_value}")
                             st.error("❌ Invalid")
-                        elif current_bet_value:
+                        elif bet_value:
                             st.success("✅ Valid")
         
         # Show validation errors
