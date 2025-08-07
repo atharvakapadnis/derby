@@ -1468,21 +1468,20 @@ elif page == "🏁 Race Management":
                         st.write(f"**{bettor}**")
                         current_bet = st.text_input(
                             "Horse #:", 
-                            value=st.session_state[bet_key],
-                            key=f"input_{bet_key}",
+                            key=bet_key,  # Use bet_key directly as the key
                             placeholder="e.g. 3",
                             label_visibility="collapsed"
                         )
                         
-                        # Update session state
-                        st.session_state[bet_key] = current_bet
-                        bettor_bets[bettor] = current_bet
+                        # Get current bet value from session state (this will persist across pages)
+                        current_bet_value = st.session_state.get(bet_key, '')
+                        bettor_bets[bettor] = current_bet_value
                         
                         # Validate bet
-                        if current_bet and current_bet not in horse_numbers:
-                            invalid_bets.append(f"{bettor}: Horse #{current_bet}")
+                        if current_bet_value and current_bet_value not in horse_numbers:
+                            invalid_bets.append(f"{bettor}: Horse #{current_bet_value}")
                             st.error("❌ Invalid")
-                        elif current_bet:
+                        elif current_bet_value:
                             st.success("✅ Valid")
         
         # Show validation errors
@@ -1491,8 +1490,13 @@ elif page == "🏁 Race Management":
             for error in invalid_bets[:5]:  # Show first 5 errors
                 st.write(f"• {error}")
         
-        # Progress indicator
-        filled_bets = sum(1 for bet in bettor_bets.values() if bet.strip())
+        # Progress indicator - check all bettors, not just current page
+        all_bettor_bets = {}
+        for bettor in bettor_names:
+            bet_key = f"bet_{bettor}_{st.session_state.current_race}"
+            all_bettor_bets[bettor] = st.session_state.get(bet_key, '')
+        
+        filled_bets = sum(1 for bet in all_bettor_bets.values() if bet.strip())
         st.progress(min(filled_bets / len(bettor_names), 1.0))
         st.caption(f"Bets entered: {filled_bets}/{len(bettor_names)}")
         
@@ -1500,7 +1504,7 @@ elif page == "🏁 Race Management":
         
         # Results preview and submission
         all_positions_filled = first_place and second_place and third_place
-        all_bets_filled = all(bettor_bets.get(b, '') for b in bettor_names)
+        all_bets_filled = all(all_bettor_bets.get(b, '') for b in bettor_names)
         unique_positions = len(set([first_place, second_place, third_place])) == 3 if all_positions_filled else False
         valid_horses_positions = not invalid_horses
         valid_horses_bets = not invalid_bets
@@ -1540,7 +1544,7 @@ elif page == "🏁 Race Management":
                     first_place,
                     second_place,
                     third_place,
-                    bettor_bets
+                    all_bettor_bets
                 )
                 
                 if success:
@@ -1565,7 +1569,7 @@ elif page == "🏁 Race Management":
                 export_format = st.radio("Export format:", ["Text", "CSV"], horizontal=True)
                 
                 if export_format == "Text":
-                    bet_text = '\n'.join([f"{bettor}:{bet}" for bettor, bet in bettor_bets.items() if bet])
+                    bet_text = '\n'.join([f"{bettor}:{bet}" for bettor, bet in all_bettor_bets.items() if bet])
                     st.download_button(
                         label="Download Bet List",
                         data=bet_text,
@@ -1574,7 +1578,7 @@ elif page == "🏁 Race Management":
                     )
                 else:
                     import pandas as pd
-                    bet_df = pd.DataFrame([{"name": bettor, "horse": bet} for bettor, bet in bettor_bets.items() if bet])
+                    bet_df = pd.DataFrame([{"name": bettor, "horse": bet} for bettor, bet in all_bettor_bets.items() if bet])
                     csv = bet_df.to_csv(index=False)
                     st.download_button(
                         label="Download CSV",
